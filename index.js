@@ -33,58 +33,64 @@ async function run() {
                 const limit = parseInt(req.query.limit) || 8
                 const search = req.query.search || ""
                 const sort = req.query.sort || ""
-                
+
                 const skip = (page - 1) * limit
-                
+
                 let query = {}
                 if (search && search.trim() !== "") {
                     query.product_name = { $regex: search, $options: 'i' }
                 }
-                
-                let sortOptions = {}
-                switch(sort) {
+
+                let products = await productsCollection.find(query).toArray()
+
+                products = products.map(product => ({
+                    ...product,
+                    price: parseFloat(product.price) || 0,
+                    rating: parseFloat(product.rating) || 0,
+                    created_at: product.created_at ? new Date(product.created_at) : new Date()
+                }))
+
+                switch (sort) {
                     case 'price-low-high':
-                        sortOptions.price = 1
+                        products.sort((a, b) => a.price - b.price)
                         break
                     case 'price-high-low':
-                        sortOptions.price = -1
+                        products.sort((a, b) => b.price - a.price)
                         break
                     case 'rating-high-low':
-                        sortOptions.rating = -1
+                        products.sort((a, b) => b.rating - a.rating)
                         break
                     case 'rating-low-high':
-                        sortOptions.rating = 1
+                        products.sort((a, b) => a.rating - b.rating)
                         break
                     case 'newest-first':
-                        sortOptions.created_at = -1
+                        products.sort((a, b) => b.created_at - a.created_at)
                         break
                     case 'oldest-first':
-                        sortOptions.created_at = 1
+                        products.sort((a, b) => a.created_at - b.created_at)
                         break
                     case 'popular':
-                        sortOptions.rating = -1
+                        products.sort((a, b) => {
+                            const ratingDiff = b.rating - a.rating
+                            if (ratingDiff !== 0) return ratingDiff
+                            return b.review_count - a.review_count
+                        })
                         break
                     default:
-                        sortOptions.created_at = -1 
+                        products.sort((a, b) => b.created_at - a.created_at) 
                 }
-                
-                const total = await productsCollection.countDocuments(query)
-                
-                const products = await productsCollection
-                    .find(query)
-                    .sort(sortOptions)
-                    .skip(skip)
-                    .limit(limit)
-                    .toArray()
-                
+
+                const total = products.length
+                const paginatedProducts = products.slice(skip, skip + limit)
+
                 res.send({
-                    products,
+                    products: paginatedProducts,
                     total,
                     page,
                     totalPages: Math.ceil(total / limit),
                     limit
                 })
-                
+
             } catch (error) {
                 console.error('Error in paginated products:', error)
                 res.status(500).send({ error: 'Internal server error' })
