@@ -65,7 +65,7 @@ async function run() {
                         sortOptions.rating = -1
                         break
                     default:
-                        sortOptions.created_at = -1
+                        sortOptions.created_at = -1 
                 }
                 
                 const total = await productsCollection.countDocuments(query)
