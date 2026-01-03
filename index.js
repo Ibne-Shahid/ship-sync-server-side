@@ -27,10 +27,71 @@ async function run() {
         const productsCollection = db.collection('products')
         const importsCollection = db.collection('imports')
 
-        // Products APIs
+        app.get('/products/paginated', async (req, res) => {
+            try {
+                const page = parseInt(req.query.page) || 1
+                const limit = parseInt(req.query.limit) || 8
+                const search = req.query.search || ""
+                const sort = req.query.sort || ""
+                
+                const skip = (page - 1) * limit
+                
+                let query = {}
+                if (search && search.trim() !== "") {
+                    query.product_name = { $regex: search, $options: 'i' }
+                }
+                
+                let sortOptions = {}
+                switch(sort) {
+                    case 'price-low-high':
+                        sortOptions.price = 1
+                        break
+                    case 'price-high-low':
+                        sortOptions.price = -1
+                        break
+                    case 'rating-high-low':
+                        sortOptions.rating = -1
+                        break
+                    case 'rating-low-high':
+                        sortOptions.rating = 1
+                        break
+                    case 'newest-first':
+                        sortOptions.created_at = -1
+                        break
+                    case 'oldest-first':
+                        sortOptions.created_at = 1
+                        break
+                    case 'popular':
+                        sortOptions.rating = -1
+                        break
+                    default:
+                        sortOptions.created_at = -1
+                }
+                
+                const total = await productsCollection.countDocuments(query)
+                
+                const products = await productsCollection
+                    .find(query)
+                    .sort(sortOptions)
+                    .skip(skip)
+                    .limit(limit)
+                    .toArray()
+                
+                res.send({
+                    products,
+                    total,
+                    page,
+                    totalPages: Math.ceil(total / limit),
+                    limit
+                })
+                
+            } catch (error) {
+                console.error('Error in paginated products:', error)
+                res.status(500).send({ error: 'Internal server error' })
+            }
+        })
 
         app.get('/products', async (req, res) => {
-
             const email = req.query.email
             const query = {}
             if (email) {
@@ -60,7 +121,6 @@ async function run() {
         })
 
         // Exported Products APIs
-
         app.post('/products', async (req, res) => {
             const newProduct = req.body
             newProduct.created_at = new Date()
@@ -99,15 +159,12 @@ async function run() {
         })
 
         // Imported Products APIs
-
         app.get('/imports', async (req, res) => {
-
             const email = req.query.email
             const query = {}
             if (email) {
                 query.importer_email = email
             }
-
 
             const cursor = importsCollection.find(query)
             const result = await cursor.toArray()
@@ -147,10 +204,7 @@ async function run() {
             res.send(result)
         })
 
-        // await client.db("admin").command({ ping: 1 });
-        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
-
         // await client.close();
     }
 }
